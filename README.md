@@ -1,2 +1,2 @@
 # Arduino_Tesis
-este es mi proyectoi de tesis basado en arduino.
+este es mi proyecto de tesis basado en arduino.
