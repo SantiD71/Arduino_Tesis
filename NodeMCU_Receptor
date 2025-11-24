@@ -1,0 +1,82 @@
+#include <ESP8266WiFi.h>
+#include <SoftwareSerial.h>
+
+SoftwareSerial mySerial(D1, D0);  // Configura los pines RX y TX en el NodeMCU
+
+const char* ssid = "MonWifi Utilitario";  // Nombre de la red Wi-Fi
+const char* password = "24472243"; // Contraseña de la red Wi-Fi
+
+const char* host = "192.168.0.125";  // Dirección IP de la computadora en la red
+const int port = 5000;               // Puerto en el que la computadora está escuchando
+
+WiFiClient client;
+unsigned long lastReconnectAttempt = 0;  // Para manejar el tiempo de reconexión al servidor
+const unsigned long reconnectInterval = 60000;  // Intentar reconectar cada 10 segundos
+
+void setup() {
+  Serial.begin(9600);  // Para depuración en el monitor serial
+  mySerial.begin(9600); // Para comunicación con el Arduino Uno
+  
+  // Conexión Wi-Fi
+  Serial.print("Conectando a ");
+  Serial.println(ssid);
+  WiFi.begin(ssid, password);
+  
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  
+  Serial.println("");
+  Serial.println("WiFi conectado");
+  Serial.println("Dirección IP: ");
+  Serial.println(WiFi.localIP());
+}
+
+void loop() {
+  // Verificar y mantener la conexión Wi-Fi
+  if (WiFi.status() != WL_CONNECTED) {
+    reconnectWiFi();
+  }
+
+  // Verificar y mantener la conexión al servidor
+  if (!client.connected()) {
+    unsigned long now = millis();
+    if (now - lastReconnectAttempt >= reconnectInterval) {
+      lastReconnectAttempt = now;
+      if (reconnectToServer()) {
+        Serial.println("Conectado al servidor");
+      } else {
+        Serial.println("Fallo en la conexión al servidor");
+      }
+    }
+  } else {
+    // Conectado al servidor, enviar mensaje si hay datos del Arduino
+    if (mySerial.available()) {
+      String message = mySerial.readString(); // Lee el string completo
+      Serial.println("Enviando mensaje: " + message); // Imprime el mensaje recibido en el monitor serial
+      
+      client.println(message);  // Enviar el mensaje al servidor
+      client.flush();  // Asegurar que el mensaje se envíe
+    }
+  }
+}
+
+// Función para reconectar al servidor con un timeout
+bool reconnectToServer() {
+  Serial.println("Intentando conectar al servidor...");
+  return client.connect(host, port);
+}
+
+// Función para reconectar a la red Wi-Fi
+void reconnectWiFi() {
+  Serial.println("Reconectando a Wi-Fi...");
+  WiFi.disconnect();
+  WiFi.begin(ssid, password);
+  
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWi-Fi reconectado");
+}
