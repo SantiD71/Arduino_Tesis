@@ -604,3 +604,6 @@ String generarCadenaConIDyHora(int id) {
   return resultado;
 }
 
+//falta agregar un check de mensaje recibido entre el uno y el nodemcu
+//falta agregar/cambiar poder agregar un administrador
+
