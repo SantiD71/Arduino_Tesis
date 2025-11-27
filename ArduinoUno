@@ -606,4 +606,5 @@ String generarCadenaConIDyHora(int id) {
 
 //falta agregar un check de mensaje recibido entre el uno y el nodemcu
 //falta agregar/cambiar poder agregar un administrador
+// esto deberia figurar como diferencia entiendo yo
 
