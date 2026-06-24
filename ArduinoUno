@@ -65,16 +65,40 @@ void setup() {
     lcd.clear();
   }
 
-  admin_ID = registrarAdministrador();
-  lcd.clear();
-  lcd.setCursor(0,0);
-  lcd.print("Administrador");
-  lcd.setCursor(0,1);
-  lcd.print(" Cargado ");
-  delay(1000);
+  if (existeAdmin()) {
+    admin_ID = 0;
 
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Admin ya existe");
+    lcd.setCursor(0, 1);
+    lcd.print("ID: 00");
+    delay(1500);
+    lcd.clear();
 
+  } else {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Cargar Admin");
+    lcd.setCursor(0, 1);
+    lcd.print("ID: 00");
+    delay(1500);
+    lcd.clear();
 
+    while (!existeAdmin()) {
+      admin_ID = registrarAdministrador();
+    }
+
+    admin_ID = 0;
+
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Admin cargado");
+    lcd.setCursor(0, 1);
+    lcd.print("ID: 00");
+    delay(1500);
+    lcd.clear();
+  }
 }
 
 void loop() {
@@ -417,6 +441,14 @@ int registrarAdministrador() {
   return admin_ID;
 }
 
+bool existeAdmin() {
+  if (finger.loadModel(0) == FINGERPRINT_OK) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
 bool enrollFinger(int id) {
   int p = -1;
   lcd.setCursor(0, 0);
@@ -603,8 +635,3 @@ String generarCadenaConIDyHora(int id) {
   
   return resultado;
 }
-
-//falta agregar un check de mensaje recibido entre el uno y el nodemcu
-//falta agregar/cambiar poder agregar un administrador
-// esto deberia figurar como diferencia entiendo yo
-
