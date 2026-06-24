@@ -1,82 +1,136 @@
 #include <ESP8266WiFi.h>
+#include <WiFiClientSecure.h>
 #include <SoftwareSerial.h>
 
-SoftwareSerial mySerial(D1, D0);  // Configura los pines RX y TX en el NodeMCU
+SoftwareSerial mySerial(D1, D0);  // RX, TX en NodeMCU
 
-const char* ssid = "MonWifi Utilitario";  // Nombre de la red Wi-Fi
-const char* password = "24472243"; // Contraseña de la red Wi-Fi
+const char* ssid = "MonWifi Utilitario";
+const char* password = "24472243";
 
-const char* host = "192.168.0.125";  // Dirección IP de la computadora en la red
-const int port = 5000;               // Puerto en el que la computadora está escuchando
+const char* host = "santid71.app.n8n.cloud";
+const int httpsPort = 443;
 
-WiFiClient client;
-unsigned long lastReconnectAttempt = 0;  // Para manejar el tiempo de reconexión al servidor
-const unsigned long reconnectInterval = 60000;  // Intentar reconectar cada 10 segundos
+const char* webhookPath = "/webhook-test/e232aa60-25e8-4a48-be67-e2d09e3e9d24";
+
+WiFiClientSecure client;
 
 void setup() {
-  Serial.begin(9600);  // Para depuración en el monitor serial
-  mySerial.begin(9600); // Para comunicación con el Arduino Uno
-  
-  // Conexión Wi-Fi
+  Serial.begin(9600);
+  mySerial.begin(9600);
+
+  client.setInsecure();  // Permite HTTPS sin validar certificado
+
   Serial.print("Conectando a ");
   Serial.println(ssid);
+
   WiFi.begin(ssid, password);
-  
+
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
-  
+
   Serial.println("");
   Serial.println("WiFi conectado");
-  Serial.println("Dirección IP: ");
+  Serial.println("Direccion IP: ");
   Serial.println(WiFi.localIP());
 }
 
 void loop() {
-  // Verificar y mantener la conexión Wi-Fi
   if (WiFi.status() != WL_CONNECTED) {
     reconnectWiFi();
   }
 
-  // Verificar y mantener la conexión al servidor
-  if (!client.connected()) {
-    unsigned long now = millis();
-    if (now - lastReconnectAttempt >= reconnectInterval) {
-      lastReconnectAttempt = now;
-      if (reconnectToServer()) {
-        Serial.println("Conectado al servidor");
-      } else {
-        Serial.println("Fallo en la conexión al servidor");
-      }
-    }
-  } else {
-    // Conectado al servidor, enviar mensaje si hay datos del Arduino
-    if (mySerial.available()) {
-      String message = mySerial.readString(); // Lee el string completo
-      Serial.println("Enviando mensaje: " + message); // Imprime el mensaje recibido en el monitor serial
-      
-      client.println(message);  // Enviar el mensaje al servidor
-      client.flush();  // Asegurar que el mensaje se envíe
+  if (mySerial.available()) {
+    String message = mySerial.readStringUntil('\n');
+    message.trim();
+
+    if (message.length() > 0) {
+      Serial.println("Mensaje recibido desde Arduino:");
+      Serial.println(message);
+
+      enviarWebhook(message);
     }
   }
 }
 
-// Función para reconectar al servidor con un timeout
-bool reconnectToServer() {
-  Serial.println("Intentando conectar al servidor...");
-  return client.connect(host, port);
+void enviarWebhook(String message) {
+  int primerSeparador = message.indexOf(';');
+  int segundoSeparador = message.indexOf(';', primerSeparador + 1);
+
+  if (primerSeparador == -1 || segundoSeparador == -1) {
+    Serial.println("Formato invalido. No se envia.");
+    return;
+  }
+
+  String id = message.substring(0, primerSeparador);
+  String fechaHora = message.substring(primerSeparador + 1, segundoSeparador);
+  String tipo = message.substring(segundoSeparador + 1);
+
+  id.trim();
+  fechaHora.trim();
+  tipo.trim();
+
+  if (tipo != "I" && tipo != "E") {
+    Serial.println("Tipo invalido. Debe ser I o E.");
+    return;
+  }
+
+  String json = "{";
+  json += "\"id\":\"" + id + "\",";
+  json += "\"fecha_hora\":\"" + fechaHora + "\",";
+  json += "\"tipo\":\"" + tipo + "\"";
+  json += "}";
+
+  Serial.println("Conectando con n8n...");
+
+  if (!client.connect(host, httpsPort)) {
+    Serial.println("No se pudo conectar con n8n.");
+    return;
+  }
+
+  Serial.println("Enviando JSON:");
+  Serial.println(json);
+
+  client.println("POST " + String(webhookPath) + " HTTP/1.1");
+  client.println("Host: " + String(host));
+  client.println("Content-Type: application/json");
+  client.println("User-Agent: NodeMCU-ESP8266");
+  client.print("Content-Length: ");
+  client.println(json.length());
+  client.println("Connection: close");
+  client.println();
+  client.println(json);
+
+  unsigned long timeout = millis();
+
+  while (client.connected() && !client.available()) {
+    if (millis() - timeout > 5000) {
+      Serial.println("Timeout esperando respuesta de n8n.");
+      client.stop();
+      return;
+    }
+  }
+
+  Serial.println("Respuesta de n8n:");
+  while (client.available()) {
+    String line = client.readStringUntil('\n');
+    Serial.println(line);
+  }
+
+  client.stop();
+  Serial.println("Conexion cerrada.");
 }
 
-// Función para reconectar a la red Wi-Fi
 void reconnectWiFi() {
-  Serial.println("Reconectando a Wi-Fi...");
+  Serial.println("Reconectando a WiFi...");
   WiFi.disconnect();
   WiFi.begin(ssid, password);
-  
+
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
-  Serial.println("\nWi-Fi reconectado");
+
+  Serial.println("\nWiFi reconectado");
 }
